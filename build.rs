@@ -47,7 +47,7 @@ fn main() {
         opcodes_count = (YAML_HASHES - 1) / 3;
     }
 
-    let mut enum_opcode = "#[derive(Clone, Copy)]\npub enum Opcode {\n".to_string();
+    let mut enum_opcode = "#[derive(Clone, Copy, PartialEq)]\npub enum Opcode {\n".to_string();
     let mut graph_inst_creations = "impl Graph {\n".to_string();
 
     let mut opcodes = Vec::new();
@@ -66,11 +66,11 @@ fn main() {
         graph_inst_creations.push_str(&format!(
             "
     pub fn create_inst_{}(&mut self) -> *mut {} {{
-        self.cur_id = self.cur_id + 1;
+        self.inst_cur_id = self.inst_cur_id + 1;
         let inst : *mut {};
         unsafe {{
             inst = libc::malloc(std::mem::size_of::<{}>()) as *mut {};
-            (*inst).set_id(self.cur_id);
+            (*inst).set_id(self.inst_cur_id);
             (*inst).set_opcode(Opcode::{});
         }}
         self.instructions.push(inst);

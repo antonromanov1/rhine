@@ -6,3 +6,7 @@ instructions:
   - opcode: Add
     base: BinaryOperation
     description: Add two inputs
+
+  - opcode: Phi
+    base: PhiInst
+    description: Phi instruction
