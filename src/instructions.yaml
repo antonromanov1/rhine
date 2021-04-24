@@ -1,0 +1,8 @@
+instructions:
+  - opcode: Not
+    base: UnaryOperation
+    description: Bitwise Not
+
+  - opcode: Add
+    base: BinaryOperation
+    description: Add two inputs
