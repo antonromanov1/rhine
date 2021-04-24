@@ -47,8 +47,10 @@ fn main() {
         opcodes_count = (YAML_HASHES - 1) / 3;
     }
 
-    let mut enum_opcode = "pub enum Opcode {\n".to_string();
+    let mut enum_opcode = "#[derive(Clone, Copy)]\npub enum Opcode {\n".to_string();
     let mut graph_inst_creations = "impl Graph {\n".to_string();
+
+    let mut opcodes = Vec::new();
 
     for i in 0..opcodes_count {
         let opcode = docs[0]["instructions"][i as usize]["opcode"]
@@ -58,6 +60,7 @@ fn main() {
             .as_str()
             .unwrap();
 
+        opcodes.push(opcode.to_string());
         enum_opcode.push_str(&format!("  {},\n", opcode));
 
         graph_inst_creations.push_str(&format!(
@@ -82,7 +85,13 @@ fn main() {
         ));
     }
 
-    enum_opcode.push_str("}\n");
+    enum_opcode
+        .push_str("}\n\nfn get_opcode_string(opcode: Opcode) -> &'static str {\nmatch opcode {\n");
+    for opcode in opcodes {
+        enum_opcode.push_str(&format!("    Opcode::{} => \"{}\",\n", opcode, opcode));
+    }
+    enum_opcode.push_str("}\n}\n");
+
     graph_inst_creations.push_str("}\n");
 
     fs::write(&enum_opcode_path, &enum_opcode).unwrap();

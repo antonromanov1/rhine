@@ -1,10 +1,14 @@
 extern crate libc;
 
+// enum Opcode:
 include!(concat!(env!("OUT_DIR"), "/opcode.rs"));
 
 pub trait Inst {
+    fn get_opcode(&self) -> Opcode;
     fn set_id(&mut self, id: u16);
     fn set_opcode(&mut self, opcode: Opcode);
+
+    fn dump(&self);
 }
 
 pub struct InstData {
@@ -13,6 +17,10 @@ pub struct InstData {
 }
 
 impl Inst for InstData {
+    fn get_opcode(&self) -> Opcode {
+        self.opcode
+    }
+
     fn set_id(&mut self, id: u16) {
         self.id = id;
     }
@@ -20,16 +28,32 @@ impl Inst for InstData {
     fn set_opcode(&mut self, opcode: Opcode) {
         self.opcode = opcode;
     }
+
+    fn dump(&self) {
+        println!(
+            "ID: {}, Opcode: {}",
+            self.id,
+            get_opcode_string(self.opcode)
+        );
+    }
 }
 
 macro_rules! impl_inst {
     () => {
+        fn get_opcode(&self) -> Opcode {
+            self.inst.get_opcode()
+        }
+
         fn set_id(&mut self, id: u16) {
             self.inst.set_id(id);
         }
 
         fn set_opcode(&mut self, opcode: Opcode) {
             self.inst.set_opcode(opcode);
+        }
+
+        fn dump(&self) {
+            self.inst.dump();
         }
     };
 }
@@ -74,4 +98,5 @@ impl Drop for Graph {
     }
 }
 
+// Graph methods create_inst_<opcode>
 include!(concat!(env!("OUT_DIR"), "/graph_create_inst.rs"));
