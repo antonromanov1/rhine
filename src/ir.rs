@@ -13,6 +13,9 @@ pub trait Inst {
 
     fn set_id(&mut self, id: u16);
     fn set_opcode(&mut self, opcode: Opcode);
+    fn set_block(&mut self, block: *mut BasicBlock);
+    fn set_prev(&mut self, prev: *mut dyn Inst);
+    fn set_next(&mut self, next: *mut dyn Inst);
 
     fn dump(&self);
 }
@@ -21,7 +24,7 @@ pub struct InstData {
     id: u16,
 
     // Basic block this instruction belongs to
-    bb: *mut BasicBlock,
+    block: *mut BasicBlock,
 
     // Next instruction within basic block
     next: Option<NonNull<dyn Inst>>,
@@ -38,7 +41,7 @@ impl Inst for InstData {
     }
 
     fn get_block(&self) -> *mut BasicBlock {
-        self.bb
+        self.block
     }
 
     fn is_phi(&self) -> bool {
@@ -51,6 +54,18 @@ impl Inst for InstData {
 
     fn set_opcode(&mut self, opcode: Opcode) {
         self.opcode = opcode;
+    }
+
+    fn set_block(&mut self, block: *mut BasicBlock) {
+        self.block = block;
+    }
+
+    fn set_prev(&mut self, prev: *mut dyn Inst) {
+        self.prev = NonNull::new(prev);
+    }
+
+    fn set_next(&mut self, next: *mut dyn Inst) {
+        self.next = NonNull::new(next);
     }
 
     fn dump(&self) {
@@ -82,6 +97,18 @@ macro_rules! impl_inst {
 
         fn set_opcode(&mut self, opcode: Opcode) {
             self.inst.set_opcode(opcode);
+        }
+
+        fn set_block(&mut self, block: *mut BasicBlock) {
+            self.inst.set_block(block);
+        }
+
+        fn set_prev(&mut self, prev: *mut dyn Inst) {
+            self.set_prev(prev);
+        }
+
+        fn set_next(&mut self, next: *mut dyn Inst) {
+            self.set_next(next);
         }
 
         fn dump(&self) {
@@ -132,7 +159,6 @@ pub struct BasicBlock {
     dominator: *mut BasicBlock,
 
     */
-
     first_phi: Option<NonNull<dyn Inst>>,
     first_inst: Option<NonNull<dyn Inst>>,
     last_inst: Option<NonNull<dyn Inst>>,
@@ -163,13 +189,39 @@ impl BasicBlock {
         self.id = id;
     }
 
-    pub fn add_inst(&mut self, inst: *mut dyn Inst, _to_end: bool) {
-        unsafe{
+    pub fn add_inst(&mut self, inst: *mut dyn Inst, to_end: bool) {
+        unsafe {
             assert_eq!((*inst).is_phi(), false);
+            (*inst).set_block(self as *mut BasicBlock);
         }
-        /*
-        (*inst).set_block(self as *mut BasicBlock);
-        */
+
+        if self.last_inst == None {
+            assert!(self.first_inst == self.last_inst);
+
+            self.first_inst = NonNull::new(inst);
+            self.last_inst = self.first_inst.clone();
+            return;
+        }
+
+        let first_or_last = match &self.last_inst {
+            Some(non_null) => non_null.as_ptr(),
+            _ => unreachable!(),
+        };
+        if to_end {
+            unsafe {
+                (*first_or_last).set_next(inst);
+            }
+        } else {
+            unsafe {
+                (*first_or_last).set_prev(inst);
+            }
+        }
+        let new_inst = NonNull::new(inst);
+        if to_end {
+            self.last_inst = new_inst;
+        } else {
+            self.first_inst = new_inst;
+        }
     }
 }
 
