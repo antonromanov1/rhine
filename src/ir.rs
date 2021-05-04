@@ -104,11 +104,11 @@ macro_rules! impl_inst {
         }
 
         fn set_prev(&mut self, prev: *mut dyn Inst) {
-            self.set_prev(prev);
+            self.inst.set_prev(prev);
         }
 
         fn set_next(&mut self, next: *mut dyn Inst) {
-            self.set_next(next);
+            self.inst.set_next(next);
         }
 
         fn dump(&self) {
@@ -159,7 +159,8 @@ pub struct BasicBlock {
     dominator: *mut BasicBlock,
 
     */
-    first_phi: Option<NonNull<dyn Inst>>,
+
+    // first_phi: Option<NonNull<dyn Inst>>,
     first_inst: Option<NonNull<dyn Inst>>,
     last_inst: Option<NonNull<dyn Inst>>,
 
@@ -167,19 +168,23 @@ pub struct BasicBlock {
 }
 
 impl BasicBlock {
+    /*
     pub fn new(graph: *mut Graph) -> BasicBlock {
         BasicBlock {
             graph: graph,
-            first_phi: None,
+            // first_phi: None,
             first_inst: None,
             last_inst: None,
             id: 0,
         }
     }
+    */
 
+    /*
     pub fn has_phi(&self) -> bool {
         self.first_phi != None
     }
+    */
 
     pub fn set_graph(&mut self, graph: *mut Graph) {
         self.graph = graph;
@@ -229,8 +234,8 @@ pub struct Graph {
     // Sequence of blocks in the insertion order
     blocks: Vec<*mut BasicBlock>,
 
-    start_block: *mut BasicBlock,
-    end_block: *mut BasicBlock,
+    // start_block: *mut BasicBlock,
+    // end_block: *mut BasicBlock,
 
     inst_cur_id: u16,
     instructions: Vec<*mut dyn Inst>,
@@ -240,8 +245,8 @@ impl Graph {
     pub fn new() -> Graph {
         Graph {
             blocks: Vec::new(),
-            start_block: 0 as *mut BasicBlock,
-            end_block: 0 as *mut BasicBlock,
+            // start_block: 0 as *mut BasicBlock,
+            // end_block: 0 as *mut BasicBlock,
             inst_cur_id: 0,
             instructions: Vec::new(),
         }
