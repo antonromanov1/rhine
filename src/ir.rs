@@ -168,7 +168,6 @@ pub struct BasicBlock {
 }
 
 impl BasicBlock {
-    /*
     pub fn new(graph: *mut Graph) -> BasicBlock {
         BasicBlock {
             graph: graph,
@@ -178,7 +177,6 @@ impl BasicBlock {
             id: 0,
         }
     }
-    */
 
     /*
     pub fn has_phi(&self) -> bool {
@@ -261,12 +259,14 @@ impl Graph {
     }
 
     pub fn create_empty_block(&mut self) -> *mut BasicBlock {
-        let block: *mut BasicBlock;
+        let block = BasicBlock::new(self as *mut Graph);
+        let ptr: *mut BasicBlock;
         unsafe {
-            block = libc::malloc(std::mem::size_of::<BasicBlock>()) as *mut BasicBlock;
+            ptr = libc::malloc(std::mem::size_of::<BasicBlock>()) as *mut BasicBlock;
+            std::ptr::replace(ptr, block);
         }
-        self.add_block(block);
-        block
+        self.add_block(ptr);
+        ptr
     }
 }
 
