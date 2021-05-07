@@ -144,21 +144,11 @@ impl Inst for PhiInst {
 pub struct BasicBlock {
     graph: *mut Graph,
 
-    /*
-
-    // Sequence of predecessor blocks
-    preds: Vec<*mut BasicBlock>,
-
     // Sequence of successor blocks
     succs: Vec<*mut BasicBlock>,
 
-    // Sequence of dominated blocks
-    dom_blocks: Vec<*mut BasicBlock>,
-
-    // Dominator block
-    dominator: *mut BasicBlock,
-
-    */
+    // Sequence of predecessor blocks
+    preds: Vec<*mut BasicBlock>,
 
     // first_phi: Option<NonNull<dyn Inst>>,
     first_inst: Option<NonNull<dyn Inst>>,
@@ -171,6 +161,8 @@ impl BasicBlock {
     pub fn new(graph: *mut Graph) -> BasicBlock {
         BasicBlock {
             graph: graph,
+            succs: Vec::new(),
+            preds: Vec::new(),
             // first_phi: None,
             first_inst: None,
             last_inst: None,
@@ -190,6 +182,98 @@ impl BasicBlock {
 
     pub fn set_id(&mut self, id: u8) {
         self.id = id;
+    }
+
+    // FIXME: DRY
+    pub fn get_pred_block_index(&self, block: *const BasicBlock) -> usize {
+        let pos = self
+            .preds
+            .iter()
+            .position(|&pred| pred == block as *mut BasicBlock)
+            .unwrap();
+        if pos == 0 && self.preds.len() == 2 {
+            assert!(self.preds[1] != block as *mut BasicBlock);
+        }
+        pos
+    }
+
+    // FIXME: DRY
+    pub fn get_succ_block_index(&self, block: *const BasicBlock) -> usize {
+        let pos = self
+            .succs
+            .iter()
+            .position(|&succ| succ == block as *mut BasicBlock)
+            .unwrap();
+        if pos == 0 && self.succs.len() == 2 {
+            assert!(self.succs[1] != block as *mut BasicBlock);
+        }
+        pos
+    }
+
+    pub fn replace_pred(&mut self, prev_pred: *mut BasicBlock, new_pred: *mut BasicBlock) {
+        let index = self.get_pred_block_index(prev_pred);
+        self.preds[index] = new_pred;
+        unsafe {
+            (*new_pred).succs.push(self as *mut BasicBlock);
+        }
+    }
+
+    // FIXME: DRY
+    pub fn replace_succ(
+        &mut self,
+        prev_succ: *const BasicBlock,
+        new_succ: *mut BasicBlock,
+        can_add_empty_block: bool,
+    ) {
+        let contains = self.succs.contains(&new_succ);
+        assert!(
+            !contains || can_add_empty_block,
+            "Uncovered case where empty block needed to fix CFG"
+        );
+
+        if contains && can_add_empty_block {
+            // If edge already exists we create empty block on it
+            let empty_block: *mut BasicBlock;
+            unsafe {
+                empty_block = (*self.graph).create_empty_block();
+            }
+            self.replace_succ(new_succ, empty_block, false);
+            unsafe {
+                (*new_succ).replace_pred(self as *mut BasicBlock, empty_block);
+            }
+        }
+
+        let index = self.get_succ_block_index(prev_succ);
+        self.succs[index] = new_succ;
+        unsafe {
+            (*new_succ).preds.push(self as *mut BasicBlock);
+        }
+    }
+
+    // FIXME: DRY
+    pub fn add_succ(&mut self, succ: *mut BasicBlock, can_add_empty_block: bool) {
+        let contains = self.succs.contains(&succ);
+        assert!(
+            !contains || can_add_empty_block,
+            "Uncovered case where empty block needed to fix CFG"
+        );
+
+        if contains && can_add_empty_block {
+            // If edge already exists we create empty block on it
+            let empty_block: *mut BasicBlock;
+            unsafe {
+                empty_block = (*self.graph).create_empty_block();
+            }
+            self.replace_succ(succ, empty_block, false);
+            unsafe {
+                (*succ).replace_pred(self as *mut BasicBlock, empty_block);
+            }
+        }
+
+        self.succs.push(succ);
+        unsafe {
+            (*succ).preds.push(self as *mut BasicBlock);
+        }
     }
 
     pub fn add_inst(&mut self, inst: *mut dyn Inst, to_end: bool) {
@@ -234,7 +318,6 @@ pub struct Graph {
 
     // start_block: *mut BasicBlock,
     // end_block: *mut BasicBlock,
-
     inst_cur_id: u16,
     instructions: Vec<*mut dyn Inst>,
 }
