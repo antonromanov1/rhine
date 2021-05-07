@@ -401,7 +401,7 @@ pub struct IrConstructor {
     current_block: (i16, *mut BasicBlock),
     current_inst: (i32, Option<NonNull<dyn Inst>>),
     block_map: HashMap<u8, *mut BasicBlock>,
-    block_succs_map: HashMap<u8, Vec<u8>>,
+    block_succs_map: Vec<(i32, Vec<u8>)>,
     inst_map: HashMap<u16, *mut dyn Inst>,
     inst_inputs_map: HashMap<u16, Vec<u16>>,
     // phi_inputs_map: HashMap<u16, Vec<(u16, u16)>>,
@@ -411,47 +411,43 @@ const ID_ENTRY_BB: u8 = 0;
 const ID_EXIT_BB: u8 = 1;
 
 impl IrConstructor {
-    pub fn new() -> IrConstructor {
-        IrConstructor {
-            graph: 0 as *mut Graph,
-            current_block: (-1, 0 as *mut BasicBlock),
-            current_inst: (-1, None),
-            block_map: HashMap::new(),
-            block_succs_map: HashMap::new(),
-            inst_map: HashMap::new(),
-            inst_inputs_map: HashMap::new(),
-        }
-    }
-
-    pub fn set_graph(&mut self, graph: *mut Graph) -> &Self {
-        self.graph = graph;
+    pub fn new() -> Self {
+        let graph_obj = Graph::new();
+        let graph: *mut Graph;
+        unsafe {
+            graph = libc::malloc(std::mem::size_of::<Graph>()) as *mut Graph;
+            std::ptr::replace(graph, graph_obj);
+        };
 
         unsafe {
-            if (*self.graph).get_start_block() == 0 as *mut BasicBlock {
+            if (*graph).get_start_block() == 0 as *mut BasicBlock {
                 (*graph).create_start_block();
             }
-            if (*self.graph).get_end_block() == 0 as *mut BasicBlock {
+            if (*graph).get_end_block() == 0 as *mut BasicBlock {
                 (*graph).create_end_block();
             }
 
             assert!((*graph).get_blocks().len() == 2);
         }
 
-        self.block_map.clear();
+        let mut block_map = HashMap::new();
         unsafe {
-            self.block_map
-                .insert(ID_ENTRY_BB, (*graph).get_start_block());
-            self.block_map.insert(ID_EXIT_BB, (*graph).get_end_block());
+            block_map.insert(ID_ENTRY_BB, (*graph).get_start_block());
+            block_map.insert(ID_EXIT_BB, (*graph).get_end_block());
         }
 
-        self.block_succs_map.clear();
-        self.inst_map.clear();
-        self.inst_inputs_map.clear();
-
-        self
+        IrConstructor {
+            graph: graph,
+            current_block: (-1, 0 as *mut BasicBlock),
+            current_inst: (-1, None),
+            block_map: block_map,
+            block_succs_map: Vec::new(),
+            inst_map: HashMap::new(),
+            inst_inputs_map: HashMap::new(),
+        }
     }
 
-    pub fn new_block(&mut self, id: u8) -> &Self {
+    pub fn new_block(&mut self, id: u8) -> &mut Self {
         assert!(id != ID_ENTRY_BB && id != ID_EXIT_BB);
         assert!(!self.block_map.contains_key(&id));
         assert!(self.get_current_bb() == 0 as *mut BasicBlock);
@@ -472,6 +468,41 @@ impl IrConstructor {
         }
 
         self
+    }
+
+    pub fn new_inst(&mut self, id: u16, opc: Opcode) -> &mut Self {
+        assert!(
+            !self.inst_map.contains_key(&id),
+            "Instruction with same ID already exists"
+        );
+
+        let inst: *mut dyn Inst;
+        unsafe {
+            inst = (*self.graph).create_inst(opc);
+            (*inst).set_id(id);
+        }
+        self.current_inst = (id.into(), NonNull::new(inst));
+        self.inst_map.insert(id, inst);
+
+        assert!(self.get_current_bb() != 0 as *mut BasicBlock);
+        unsafe {
+            if (*inst).is_phi() {
+            } else {
+                (*self.get_current_bb()).add_inst(inst, true);
+            }
+        }
+
+        self
+    }
+
+    pub fn succs(&mut self, succs: &[u8]) -> &mut Self {
+        self.block_succs_map
+            .push((self.get_current_bb_id().into(), succs.to_vec()));
+        self
+    }
+
+    pub fn basic_block(&mut self, id: u8, succs: &[u8]) {
+        self.new_block(id).succs(succs);
     }
 
     pub fn get_current_bb_id(&self) -> i16 {

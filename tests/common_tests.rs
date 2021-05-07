@@ -29,3 +29,9 @@ fn common() {
         assert_eq!((*block1).get_succ_block_index(block2), 1);
     }
 }
+
+#[test]
+fn ir_constructor() {
+    let mut z = IrConstructor::new();
+    z.basic_block(2, &[3]);
+}
