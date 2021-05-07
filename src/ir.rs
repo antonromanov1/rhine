@@ -1,5 +1,6 @@
 extern crate libc;
 
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ptr::NonNull;
 
@@ -312,12 +313,22 @@ impl BasicBlock {
     }
 }
 
+fn allocate_block(graph: *mut Graph) -> *mut BasicBlock {
+    let block = BasicBlock::new(graph);
+    let ptr: *mut BasicBlock;
+    unsafe {
+        ptr = libc::malloc(std::mem::size_of::<BasicBlock>()) as *mut BasicBlock;
+        std::ptr::replace(ptr, block);
+    }
+    ptr
+}
+
 pub struct Graph {
     // Sequence of blocks in the insertion order
     blocks: Vec<*mut BasicBlock>,
 
-    // start_block: *mut BasicBlock,
-    // end_block: *mut BasicBlock,
+    start_block: *mut BasicBlock,
+    end_block: *mut BasicBlock,
     inst_cur_id: u16,
     instructions: Vec<*mut dyn Inst>,
 }
@@ -326,11 +337,23 @@ impl Graph {
     pub fn new() -> Graph {
         Graph {
             blocks: Vec::new(),
-            // start_block: 0 as *mut BasicBlock,
-            // end_block: 0 as *mut BasicBlock,
+            start_block: 0 as *mut BasicBlock,
+            end_block: 0 as *mut BasicBlock,
             inst_cur_id: 0,
             instructions: Vec::new(),
         }
+    }
+
+    pub fn get_start_block(&self) -> *mut BasicBlock {
+        self.start_block
+    }
+
+    pub fn get_end_block(&self) -> *mut BasicBlock {
+        self.end_block
+    }
+
+    pub fn get_blocks(&self) -> &Vec<*mut BasicBlock> {
+        &self.blocks
     }
 
     fn add_block(&mut self, block: *mut BasicBlock) {
@@ -342,14 +365,21 @@ impl Graph {
     }
 
     pub fn create_empty_block(&mut self) -> *mut BasicBlock {
-        let block = BasicBlock::new(self as *mut Graph);
-        let ptr: *mut BasicBlock;
-        unsafe {
-            ptr = libc::malloc(std::mem::size_of::<BasicBlock>()) as *mut BasicBlock;
-            std::ptr::replace(ptr, block);
-        }
-        self.add_block(ptr);
-        ptr
+        let block = allocate_block(self as *mut Graph);
+        self.add_block(block);
+        block
+    }
+
+    pub fn create_start_block(&mut self) -> *const BasicBlock {
+        let block = self.create_empty_block();
+        self.start_block = block;
+        block
+    }
+
+    pub fn create_end_block(&mut self) -> *const BasicBlock {
+        let block = self.create_empty_block();
+        self.end_block = block;
+        block
     }
 }
 
@@ -365,3 +395,90 @@ impl Drop for Graph {
 
 // Graph methods create_inst_<opcode>
 include!(concat!(env!("OUT_DIR"), "/graph_create_inst.rs"));
+
+pub struct IrConstructor {
+    graph: *mut Graph,
+    current_block: (i16, *mut BasicBlock),
+    current_inst: (i32, Option<NonNull<dyn Inst>>),
+    block_map: HashMap<u8, *mut BasicBlock>,
+    block_succs_map: HashMap<u8, Vec<u8>>,
+    inst_map: HashMap<u16, *mut dyn Inst>,
+    inst_inputs_map: HashMap<u16, Vec<u16>>,
+    // phi_inputs_map: HashMap<u16, Vec<(u16, u16)>>,
+}
+
+const ID_ENTRY_BB: u8 = 0;
+const ID_EXIT_BB: u8 = 1;
+
+impl IrConstructor {
+    pub fn new() -> IrConstructor {
+        IrConstructor {
+            graph: 0 as *mut Graph,
+            current_block: (-1, 0 as *mut BasicBlock),
+            current_inst: (-1, None),
+            block_map: HashMap::new(),
+            block_succs_map: HashMap::new(),
+            inst_map: HashMap::new(),
+            inst_inputs_map: HashMap::new(),
+        }
+    }
+
+    pub fn set_graph(&mut self, graph: *mut Graph) -> &Self {
+        self.graph = graph;
+
+        unsafe {
+            if (*self.graph).get_start_block() == 0 as *mut BasicBlock {
+                (*graph).create_start_block();
+            }
+            if (*self.graph).get_end_block() == 0 as *mut BasicBlock {
+                (*graph).create_end_block();
+            }
+
+            assert!((*graph).get_blocks().len() == 2);
+        }
+
+        self.block_map.clear();
+        unsafe {
+            self.block_map
+                .insert(ID_ENTRY_BB, (*graph).get_start_block());
+            self.block_map.insert(ID_EXIT_BB, (*graph).get_end_block());
+        }
+
+        self.block_succs_map.clear();
+        self.inst_map.clear();
+        self.inst_inputs_map.clear();
+
+        self
+    }
+
+    pub fn new_block(&mut self, id: u8) -> &Self {
+        assert!(id != ID_ENTRY_BB && id != ID_EXIT_BB);
+        assert!(!self.block_map.contains_key(&id));
+        assert!(self.get_current_bb() == 0 as *mut BasicBlock);
+
+        let block = allocate_block(self.graph);
+
+        unsafe {
+            (*self.graph).add_block(block);
+        }
+
+        self.current_block = (id.into(), block);
+        self.block_map.insert(id, block);
+
+        if self.block_succs_map.is_empty() {
+            unsafe {
+                (*(*self.graph).get_start_block()).add_succ(block, false);
+            }
+        }
+
+        self
+    }
+
+    pub fn get_current_bb_id(&self) -> i16 {
+        self.current_block.0
+    }
+
+    pub fn get_current_bb(&self) -> *mut BasicBlock {
+        self.current_block.1
+    }
+}
