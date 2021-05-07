@@ -47,7 +47,8 @@ fn main() {
         opcodes_count = (YAML_HASHES - 1) / 3;
     }
 
-    let mut enum_opcode = "#[derive(Clone, Copy, PartialEq)]\npub enum Opcode {\n".to_string();
+    let mut enum_opcode =
+        "#[derive(Clone, Copy, PartialEq, Debug)]\npub enum Opcode {\n".to_string();
     let mut graph_inst_creations = "impl Graph {\n".to_string();
 
     let mut opcodes = Vec::new();
