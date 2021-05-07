@@ -50,8 +50,8 @@ fn main() {
     let mut enum_opcode =
         "#[derive(Clone, Copy, PartialEq, Debug)]\npub enum Opcode {\n".to_string();
     let mut graph_inst_creations = "impl Graph {\n".to_string();
-
     let mut opcodes = Vec::new();
+    let mut matching_opcodes = String::new();
 
     for i in 0..opcodes_count {
         let opcode = docs[0]["instructions"][i as usize]["opcode"]
@@ -64,6 +64,7 @@ fn main() {
         opcodes.push(opcode.to_string());
         enum_opcode.push_str(&format!("  {},\n", opcode));
 
+        // Define instruction creation methods for all opcodes
         graph_inst_creations.push_str(&format!(
             "
     pub fn create_inst_{}(&mut self) -> *mut {} {{
@@ -84,6 +85,22 @@ fn main() {
             base,
             opcode
         ));
+
+        matching_opcodes.push_str(&format!(
+            "
+            Opcode::{} => {{
+                self.inst_cur_id = self.inst_cur_id + 1;
+                let inst : *mut {};
+                unsafe {{
+                    inst = libc::malloc(std::mem::size_of::<{}>()) as *mut {};
+                    (*inst).set_id(self.inst_cur_id);
+                    (*inst).set_opcode(Opcode::{});
+                }}
+                self.instructions.push(inst);
+                return inst;
+            }},\n",
+            opcode, base, base, base, opcode
+        ));
     }
 
     enum_opcode
@@ -93,6 +110,19 @@ fn main() {
     }
     enum_opcode.push_str("}\n}\n");
 
+    // Create instruction by opcode
+    graph_inst_creations.push_str(
+        "
+    pub fn create_inst(&mut self, opc: Opcode) -> *mut dyn Inst {
+        match opc {
+    ",
+    );
+    graph_inst_creations.push_str(&matching_opcodes);
+    graph_inst_creations.push_str(
+        "
+        }
+    }\n",
+    );
     graph_inst_creations.push_str("}\n");
 
     fs::write(&enum_opcode_path, &enum_opcode).unwrap();

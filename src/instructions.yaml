@@ -7,6 +7,22 @@ instructions:
     base: BinaryOperation
     description: Add two inputs
 
+  - opcode: Sub
+    base: BinaryOperation
+    description: Subtract two inputs
+
+  - opcode: Mul
+    base: BinaryOperation
+    description: Multiply two inputs
+
+  - opcode: And
+    base: BinaryOperation
+    description: Bitwise AND
+
+  - opcode: Or
+    base: BinaryOperation
+    description: Bitwise OR
+
   - opcode: Phi
     base: PhiInst
     description: Phi instruction
