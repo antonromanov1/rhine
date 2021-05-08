@@ -34,4 +34,15 @@ fn common() {
 fn ir_constructor() {
     let mut z = IrConstructor::new();
     z.basic_block(2, &[3]);
+    {
+        z.inst(1, Opcode::Alloc).I32();
+
+        z.b();
+    }
+    z.basic_block(3, &[-1]);
+    {
+        z.inst(2, Opcode::ReturnVoid).Void();
+
+        z.b();
+    }
 }

@@ -23,6 +23,14 @@ instructions:
     base: BinaryOperation
     description: Bitwise OR
 
+  - opcode: Alloc
+    base: AllocInst
+    description: An instruction to allocate memory on a call stack
+
   - opcode: Phi
     base: PhiInst
     description: Phi instruction
+
+  - opcode: ReturnVoid
+    base: ReturnVoidInst
+    description: Return from function

@@ -4,6 +4,21 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ptr::NonNull;
 
+pub enum DataType {
+    U8,
+    U16,
+    U32,
+    U64,
+    I8,
+    I16,
+    I32,
+    I64,
+    Bool,
+    F32,
+    F64,
+    Void,
+}
+
 // enum Opcode:
 include!(concat!(env!("OUT_DIR"), "/opcode.rs"));
 
@@ -14,6 +29,7 @@ pub trait Inst {
 
     fn set_id(&mut self, id: u16);
     fn set_opcode(&mut self, opcode: Opcode);
+    fn set_type(&mut self, type_: DataType);
     fn set_block(&mut self, block: *mut BasicBlock);
     fn set_prev(&mut self, prev: *mut dyn Inst);
     fn set_next(&mut self, next: *mut dyn Inst);
@@ -24,6 +40,9 @@ pub trait Inst {
 pub struct InstData {
     id: u16,
 
+    opcode: Opcode,
+    type_: DataType,
+
     // Basic block this instruction belongs to
     block: *mut BasicBlock,
 
@@ -32,8 +51,6 @@ pub struct InstData {
 
     // Previous instruction within basic block
     prev: Option<NonNull<dyn Inst>>,
-
-    opcode: Opcode,
 }
 
 impl Inst for InstData {
@@ -55,6 +72,10 @@ impl Inst for InstData {
 
     fn set_opcode(&mut self, opcode: Opcode) {
         self.opcode = opcode;
+    }
+
+    fn set_type(&mut self, type_: DataType) {
+        self.type_ = type_;
     }
 
     fn set_block(&mut self, block: *mut BasicBlock) {
@@ -100,6 +121,10 @@ macro_rules! impl_inst {
             self.inst.set_opcode(opcode);
         }
 
+        fn set_type(&mut self, type_: DataType) {
+            self.inst.set_type(type_);
+        }
+
         fn set_block(&mut self, block: *mut BasicBlock) {
             self.inst.set_block(block);
         }
@@ -134,11 +159,27 @@ impl Inst for BinaryOperation {
     impl_inst!();
 }
 
+pub struct AllocInst {
+    pub inst: InstData,
+}
+
+impl Inst for AllocInst {
+    impl_inst!();
+}
+
 pub struct PhiInst {
     pub inst: InstData,
 }
 
 impl Inst for PhiInst {
+    impl_inst!();
+}
+
+pub struct ReturnVoidInst {
+    pub inst: InstData,
+}
+
+impl Inst for ReturnVoidInst {
     impl_inst!();
 }
 
@@ -401,7 +442,7 @@ pub struct IrConstructor {
     current_block: (i16, *mut BasicBlock),
     current_inst: (i32, Option<NonNull<dyn Inst>>),
     block_map: HashMap<u8, *mut BasicBlock>,
-    block_succs_map: Vec<(i32, Vec<u8>)>,
+    block_succs_map: Vec<(i32, Vec<i8>)>,
     inst_map: HashMap<u16, *mut dyn Inst>,
     inst_inputs_map: HashMap<u16, Vec<u16>>,
     // phi_inputs_map: HashMap<u16, Vec<(u16, u16)>>,
@@ -409,6 +450,18 @@ pub struct IrConstructor {
 
 const ID_ENTRY_BB: u8 = 0;
 const ID_EXIT_BB: u8 = 1;
+
+macro_rules! fn_type {
+    ( $type_: ident ) => {
+        #[allow(non_snake_case)]
+        pub fn $type_(&mut self) -> &mut Self {
+            unsafe {
+                (*self.get_current_inst()).set_type(DataType::$type_);
+            }
+            self
+        }
+    };
+}
 
 impl IrConstructor {
     pub fn new() -> Self {
@@ -470,7 +523,7 @@ impl IrConstructor {
         self
     }
 
-    pub fn new_inst(&mut self, id: u16, opc: Opcode) -> &mut Self {
+    pub fn inst(&mut self, id: u16, opc: Opcode) -> &mut Self {
         assert!(
             !self.inst_map.contains_key(&id),
             "Instruction with same ID already exists"
@@ -495,13 +548,13 @@ impl IrConstructor {
         self
     }
 
-    pub fn succs(&mut self, succs: &[u8]) -> &mut Self {
+    pub fn succs(&mut self, succs: &[i8]) -> &mut Self {
         self.block_succs_map
             .push((self.get_current_bb_id().into(), succs.to_vec()));
         self
     }
 
-    pub fn basic_block(&mut self, id: u8, succs: &[u8]) {
+    pub fn basic_block(&mut self, id: u8, succs: &[i8]) {
         self.new_block(id).succs(succs);
     }
 
@@ -511,5 +564,32 @@ impl IrConstructor {
 
     pub fn get_current_bb(&self) -> *mut BasicBlock {
         self.current_block.1
+    }
+
+    // Reset current basic block
+    pub fn b(&mut self) {
+        self.current_block = (-1, 0 as *mut BasicBlock);
+    }
+
+    // Reset current instruction
+    pub fn i(&mut self) {
+        self.current_inst = (-1, None);
+    }
+
+    fn_type! {U8}
+    fn_type! {U16}
+    fn_type! {U32}
+    fn_type! {U64}
+    fn_type! {I8}
+    fn_type! {I16}
+    fn_type! {I32}
+    fn_type! {I64}
+    fn_type! {Bool}
+    fn_type! {F32}
+    fn_type! {F64}
+    fn_type! {Void}
+
+    fn get_current_inst(&self) -> *mut dyn Inst {
+        self.current_inst.1.unwrap().as_ptr()
     }
 }
