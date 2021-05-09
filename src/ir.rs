@@ -1,5 +1,3 @@
-extern crate libc;
-
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ptr::NonNull;
@@ -17,6 +15,7 @@ pub enum DataType {
     F32,
     F64,
     Void,
+    NoType,
 }
 
 // enum Opcode:
@@ -99,6 +98,23 @@ impl Inst for InstData {
     }
 }
 
+macro_rules! gen_new {
+    ( $t: ident) => {
+        fn new() -> $t {
+            $t {
+                inst: InstData {
+                    id: u16::MAX,
+                    opcode: Opcode::Nop,
+                    type_: DataType::NoType,
+                    block: 0 as *mut BasicBlock,
+                    next: None,
+                    prev: None,
+                },
+            }
+        }
+    };
+}
+
 macro_rules! impl_inst {
     () => {
         fn get_opcode(&self) -> Opcode {
@@ -147,12 +163,20 @@ pub struct UnaryOperation {
     pub inst: InstData,
 }
 
+impl UnaryOperation {
+    gen_new! {UnaryOperation}
+}
+
 impl Inst for UnaryOperation {
     impl_inst!();
 }
 
 pub struct BinaryOperation {
     pub inst: InstData,
+}
+
+impl BinaryOperation {
+    gen_new! {BinaryOperation}
 }
 
 impl Inst for BinaryOperation {
@@ -163,12 +187,20 @@ pub struct AllocInst {
     pub inst: InstData,
 }
 
+impl AllocInst {
+    gen_new! {AllocInst}
+}
+
 impl Inst for AllocInst {
     impl_inst!();
 }
 
 pub struct PhiInst {
     pub inst: InstData,
+}
+
+impl PhiInst {
+    gen_new! {PhiInst}
 }
 
 impl Inst for PhiInst {
@@ -179,8 +211,24 @@ pub struct ReturnVoidInst {
     pub inst: InstData,
 }
 
+impl ReturnVoidInst {
+    gen_new! {ReturnVoidInst}
+}
+
 impl Inst for ReturnVoidInst {
     impl_inst!();
+}
+
+pub struct NopInst {
+    pub inst: InstData,
+}
+
+impl NopInst {
+    gen_new! {NopInst}
+}
+
+impl Inst for NopInst {
+    impl_inst! {}
 }
 
 pub struct BasicBlock {
@@ -354,16 +402,6 @@ impl BasicBlock {
     }
 }
 
-fn allocate_block(graph: *mut Graph) -> *mut BasicBlock {
-    let block = BasicBlock::new(graph);
-    let ptr: *mut BasicBlock;
-    unsafe {
-        ptr = libc::malloc(std::mem::size_of::<BasicBlock>()) as *mut BasicBlock;
-        std::ptr::replace(ptr, block);
-    }
-    ptr
-}
-
 pub struct Graph {
     // Sequence of blocks in the insertion order
     blocks: Vec<*mut BasicBlock>,
@@ -406,7 +444,7 @@ impl Graph {
     }
 
     pub fn create_empty_block(&mut self) -> *mut BasicBlock {
-        let block = allocate_block(self as *mut Graph);
+        let block = Box::into_raw(Box::new(BasicBlock::new(self as *mut Graph)));
         self.add_block(block);
         block
     }
@@ -428,7 +466,13 @@ impl Drop for Graph {
     fn drop(&mut self) {
         while !self.instructions.is_empty() {
             unsafe {
-                libc::free(self.instructions.pop().unwrap() as *mut libc::c_void);
+                Box::from_raw(self.instructions.pop().unwrap());
+            }
+        }
+
+        while !self.blocks.is_empty() {
+            unsafe {
+                Box::from_raw(self.blocks.pop().unwrap());
             }
         }
     }
@@ -465,12 +509,7 @@ macro_rules! fn_type {
 
 impl IrConstructor {
     pub fn new() -> Self {
-        let graph_obj = Graph::new();
-        let graph: *mut Graph;
-        unsafe {
-            graph = libc::malloc(std::mem::size_of::<Graph>()) as *mut Graph;
-            std::ptr::replace(graph, graph_obj);
-        };
+        let graph = Box::into_raw(Box::new(Graph::new()));
 
         unsafe {
             if (*graph).get_start_block() == 0 as *mut BasicBlock {
@@ -505,7 +544,7 @@ impl IrConstructor {
         assert!(!self.block_map.contains_key(&id));
         assert!(self.get_current_bb() == 0 as *mut BasicBlock);
 
-        let block = allocate_block(self.graph);
+        let block = Box::into_raw(Box::new(BasicBlock::new(self.graph)));
 
         unsafe {
             (*self.graph).add_block(block);

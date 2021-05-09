@@ -71,7 +71,7 @@ fn main() {
         self.inst_cur_id = self.inst_cur_id + 1;
         let inst : *mut {};
         unsafe {{
-            inst = libc::malloc(std::mem::size_of::<{}>()) as *mut {};
+            inst = Box::into_raw(Box::new({}::new()));
             (*inst).set_id(self.inst_cur_id);
             (*inst).set_opcode(Opcode::{});
         }}
@@ -79,7 +79,6 @@ fn main() {
         inst
     }}\n",
             opcode.to_lowercase(),
-            base,
             base,
             base,
             base,
@@ -92,14 +91,14 @@ fn main() {
                 self.inst_cur_id = self.inst_cur_id + 1;
                 let inst : *mut {};
                 unsafe {{
-                    inst = libc::malloc(std::mem::size_of::<{}>()) as *mut {};
+                    inst = Box::into_raw(Box::new({}::new()));
                     (*inst).set_id(self.inst_cur_id);
                     (*inst).set_opcode(Opcode::{});
                 }}
                 self.instructions.push(inst);
                 return inst;
             }},\n",
-            opcode, base, base, base, opcode
+            opcode, base, base, opcode
         ));
     }
 

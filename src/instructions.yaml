@@ -34,3 +34,7 @@ instructions:
   - opcode: ReturnVoid
     base: ReturnVoidInst
     description: Return from function
+
+  - opcode: Nop
+    base: NopInst
+    description: Nop instruction
